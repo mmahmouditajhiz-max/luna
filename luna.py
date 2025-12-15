@@ -1,100 +1,133 @@
-import os
+# luna.py
+# ⚙ Luna Bot
+
 from dotenv import load_dotenv
+load_dotenv()
+
+import os
+import logging
+from pathlib import Path
 from flask import Flask, request
-import telebot
-from telebot import types
+from telebot import TeleBot, types
 from openai import OpenAI
 
-# =====================
-# Load env
-# =====================
-load_dotenv()
-TOKEN = os.getenv("TELEGRAM_TOKEN")
+# 🧠 Agents
+from core.tina_agent import LalaAgent
+
+# =============================
+# ⏱ Scheduler (Optional)
+# =============================
+try:
+    from scheduler import start_scheduler
+    SCHED_AVAILABLE = True
+except ImportError:
+    SCHED_AVAILABLE = False
+    print("⚠ Scheduler module not found — continuing without scheduler.")
+
+# =============================
+# Logging Setup
+# =============================
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)s | %(message)s'
+)
+log = logging.getLogger(__name__)
+
+# =============================
+# Environment Variables
+# =============================
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+RUN_MODE = os.getenv("WEBHOOK_MODE", "true").lower() == "true"
 
-# بررسی وجود کلیدها
-if not TOKEN:
-    raise ValueError("TELEGRAM_TOKEN not found in environment variables")
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY not found in environment variables")
-if not WEBHOOK_URL:
-    raise ValueError("WEBHOOK_URL not found in environment variables")
+if not TELEGRAM_TOKEN or not OPENAI_API_KEY:
+    log.error("Required environment variables missing!")
+    raise ValueError("TELEGRAM_TOKEN and OPENAI_API_KEY are required")
 
-bot = telebot.TeleBot(TOKEN)
+# =============================
+# Initialize Bot & Client
+# =============================
+bot = TeleBot(TELEGRAM_TOKEN)
+
+# مدل پیش‌فرض درست (مهم برای آینده و یکدستی)
+DEFAULT_MODEL = "gpt-4o-mini"   # ← اضافه شد
+
 client = OpenAI(api_key=OPENAI_API_KEY)
+user_state = {}
+IMG_PATH = Path("images")
 
-app = Flask(__name__)
-
-# =====================
+# =============================
+# ⚡ Agent Selector
+# =============================
+def get_active_agent(chat_id):
+    agent = user_state.get(chat_id, "lala")
+    if agent == "tina":
+        return TinaAgent()
+   # =====================
 # Keyboard
 # =====================
 def main_menu():
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add("🌙 درباره Luna")
-    kb.add("💬 صحبت با تینا")
+    kb.add("🌙 About Luna")
+    kb.add("💬 Talk to Tina")
     kb.add("🎨 ثبت سفارش نقاشی")
     return kb
 
-# =====================
-# START
-# =====================
+# =============================
+# 🚀 Command Handlers
+# =============================
 @bot.message_handler(commands=["start"])
 def start(msg):
-    bot.send_message(
-        msg.chat.id,
-        "🌙 به Luna خوش اومدی\n\n"
+    try:
+        with open(IMG_PATH / "start.jpg", "rb") as photo:
+            bot.send_photo(
+                msg.chat.id,
+                photo,
+                caption=(
+                 "🌙 به Luna خوش اومدی\n\n"
         "من دستیار هوشمند و خلاق تو هستم ✨\n"
         "از منو یکی رو انتخاب کن 👇",
         reply_markup=main_menu()
-    )
-
-# =====================
-# ABOUT
-# =====================
-@bot.message_handler(func=lambda m: m.text == "🌙 درباره Luna")
-def about(msg):
-    bot.send_message(
-        msg.chat.id,
-        "🌙 **Luna**\n\n"
-        "ربات همراه خلاق، هنری و هوشمند ✨\n"
-        "اینجام که کمک کنم، الهام بدم و بسازم 🌌",
-        parse_mode="Markdown"
-    )
-
-# =====================
-# TALK TO TINA (AI)
-# =====================
-@bot.message_handler(func=lambda m: m.text == "💬 صحبت با تینا")
-def talk_tina(msg):
-    bot.send_message(
-        msg.chat.id,
-        "💬 حالت گفت‌وگو با **تینا** فعال شد\n"
-        "هرچی دوست داری بنویس 🌸"
-    )
-    bot.register_next_step_handler(msg, tina_chat)
-
-def tina_chat(msg):
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "تو تینا هستی، یک همراه مهربان، آرام و الهام‌بخش 🌸"
-                },
-                {
-                    "role": "user",
-                    "content": msg.text
-                }
-            ]
-        )
-        reply = response.choices[0].message.content
-        bot.send_message(msg.chat.id, reply)
+            )
     except Exception as e:
-        print(f"Error in tina_chat: {e}")  # برای لاگ
-        bot.send_message(msg.chat.id, "🌙 الان کمی خسته‌ام… دوباره امتحان کن ✨")
+        log.error(f"[Start Error] {e}")
+        bot.send_message(msg.chat.id, "⚠ مشکلی در ارسال عکس شروع پیش اومد.")
 
+@bot.message_handler(func=lambda m: m.text == "💫 Start")
+def btn_start(msg):
+    bot.send_message(msg.chat.id, "یک گزینه انتخاب کن 👇", reply_markup=main_menu())
+
+@bot.message_handler(func=lambda m: m.text == "ℹ About luna")
+def about(msg):
+    try:
+ with open(IMG_PATH / "about.jpg", "rb") as photo:
+            bot.send_photo(
+                msg.chat.id,
+                photo,
+                caption=(
+                    "🌙 **Luna**\n\n"
+           "ربات همراه خلاق، هنری و هوشمند ✨\n"
+           "اینجام که کمک کنم، الهام بدم و بسازم 🌌",
+
+                )
+     )
+    except Exception as e:
+        log.error(f"[About Error] {e}")
+
+@bot.message_handler(func=lambda m: m.text == "🤖 Talk to Tina")
+def lala(msg):
+    user_state[msg.chat.id] = "tina"
+    try:
+        with open(IMG_PATH / "tina.jpg", "rb") as photo:
+            bot.send_photo(
+                msg.chat.id,
+                photo,
+                caption="  "💬 حالت گفت‌وگو با *tina* فعال شد\n"
+        "هرچی دوست داری بنویس 🌸""
+            )
+    except Exception as e:
+        log.error(f"[LaLa Error] {e}")
 # =====================
 # ART ORDER
 # =====================
@@ -110,34 +143,43 @@ def art_order(msg):
         "4️⃣ توضیحات خاص\n\n"
         "✍️ بعد از ارسال، بررسی میشه 🌙"
     )
+# =============================
+# 💬 AI Chat
+# =============================
+@bot.message_handler(func=lambda m: True)
+def chat(msg):
+    agent = get_active_agent(msg.chat.id)
+    try:
+        reply = agent.generate_response(msg.text, client)
+        bot.send_message(msg.chat.id, reply)
+    except Exception as e:
+        log.error(f"[Chat Error] {e}")
+        bot.send_message(msg.chat.id, "⚠ مشکلی پیش اومد — دوباره امتحان کن 🌙")
+ 
+# =============================
+# 🌐 Flask Webhook
+# =============================
+app = Flask(__name__)
 
-# =====================
-# WEBHOOK
-# =====================
-@app.route(f"/{TOKEN}", methods=["POST"])
+@app.route(f"/{TELEGRAM_TOKEN}", methods=["POST"])
 def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_str = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_str)
-        bot.process_new_updates([update])
-        return "ok", 200
-    else:
-        return "Bad Request", 400
+    update = types.Update.de_json(request.data.decode("UTF-8"))
+    bot.process_new_updates([update])
+    return "ok", 200
 
 @app.route("/")
 def home():
-    return "🌙 Luna Bot is Online"
+    return "✅ Luna Bot Online"
 
-# =====================
-# MAIN - فقط برای اجرای محلی
-# =====================
+# =============================
+# 🚀 Main Entry
+# =============================
 if __name__ == "__main__":
-    # فقط در محیط محلی وب‌هوک تنظیم شود
-    if os.getenv("RENDER"):  # در رندر اجرا می‌شود
-        print("Running on Render...")
-        # وب‌هوک اتوماتیک توسط رندر تنظیم می‌شود
-    else:  # اجرای محلی
-        print("Running locally...")
-        bot.remove_webhook()
-        bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
-        app.run(host="0.0.0.0", port=5000, debug=True)
+    if RUN_MODE and SCHED_AVAILABLE:
+        log.info("🌀 Scheduler started...")
+        start_scheduler(interval_seconds=300)
+    else:
+        log.info("⏱ Scheduler disabled or not found.")
+
+    log.info("✅ Bot is running...")
+    app.run(host="0.0.0.0", port=5000)
