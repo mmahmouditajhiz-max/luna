@@ -86,14 +86,20 @@ def start(msg):
                 photo,
                 caption=(
                     "🌙 به Luna خوش اومدی\n\n"
-                    "من دستیار هوشمند و خلاق تو هستم ✨\n"
-                    "از منو یکی رو انتخاب کن 👇"
-                ),
-                reply_markup=main_menu()
+                    "من دستیار هوشمند و خلاق تو هستم ✨"
+                )
             )
+
+        # ⬅️ کیبورد حتماً با پیام جدا
+        bot.send_message(
+            msg.chat.id,
+            "از منو یکی رو انتخاب کن 👇",
+            reply_markup=main_menu()
+        )
+
     except Exception as e:
         log.error(f"[Start Error] {e}")
-        bot.send_message(msg.chat.id, "⚠ مشکلی در ارسال عکس شروع پیش اومد.")
+        bot.send_message(msg.chat.id, "⚠ مشکلی پیش اومد.")
 
 @bot.message_handler(func=lambda m: m.text == "🌙 About Luna")
 def about(msg):
@@ -185,4 +191,5 @@ if __name__ == "__main__":
 
     log.info("✅ Bot is running...")
     app.run(host="0.0.0.0", port=port)
+
 
