@@ -12,7 +12,7 @@ from telebot import TeleBot, types
 from openai import OpenAI
 
 # 🧠 Agents
-from core.tina_agent import LalaAgent
+from core.tina_agent import TinaAgent
 
 # =============================
 # ⏱ Scheduler (Optional)
@@ -49,9 +49,7 @@ if not TELEGRAM_TOKEN or not OPENAI_API_KEY:
 # Initialize Bot & Client
 # =============================
 bot = TeleBot(TELEGRAM_TOKEN)
-
-# مدل پیش‌فرض درست (مهم برای آینده و یکدستی)
-DEFAULT_MODEL = "gpt-4o-mini"   # ← اضافه شد
+DEFAULT_MODEL = "gpt-4o-mini"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 user_state = {}
@@ -64,7 +62,9 @@ def get_active_agent(chat_id):
     agent = user_state.get(chat_id, "lala")
     if agent == "tina":
         return TinaAgent()
-   # =====================
+    return TinaAgent()  # فعلاً فقط tina فعاله
+
+# =====================
 # Keyboard
 # =====================
 def main_menu():
@@ -85,49 +85,48 @@ def start(msg):
                 msg.chat.id,
                 photo,
                 caption=(
-                 "🌙 به Luna خوش اومدی\n\n"
-        "من دستیار هوشمند و خلاق تو هستم ✨\n"
-        "از منو یکی رو انتخاب کن 👇",
-        reply_markup=main_menu()
+                    "🌙 به Luna خوش اومدی\n\n"
+                    "من دستیار هوشمند و خلاق تو هستم ✨\n"
+                    "از منو یکی رو انتخاب کن 👇"
+                ),
+                reply_markup=main_menu()
             )
     except Exception as e:
         log.error(f"[Start Error] {e}")
         bot.send_message(msg.chat.id, "⚠ مشکلی در ارسال عکس شروع پیش اومد.")
 
-@bot.message_handler(func=lambda m: m.text == "💫 Start")
-def btn_start(msg):
-    bot.send_message(msg.chat.id, "یک گزینه انتخاب کن 👇", reply_markup=main_menu())
-
-@bot.message_handler(func=lambda m: m.text == "ℹ About luna")
+@bot.message_handler(func=lambda m: m.text == "🌙 About Luna")
 def about(msg):
     try:
- with open(IMG_PATH / "about.jpg", "rb") as photo:
+        with open(IMG_PATH / "about.jpg", "rb") as photo:
             bot.send_photo(
                 msg.chat.id,
                 photo,
                 caption=(
-                    "🌙 **Luna**\n\n"
-           "ربات همراه خلاق، هنری و هوشمند ✨\n"
-           "اینجام که کمک کنم، الهام بدم و بسازم 🌌",
-
+                    "🌙 Luna\n\n"
+                    "ربات همراه خلاق، هنری و هوشمند ✨\n"
+                    "اینجام که کمک کنم، الهام بدم و بسازم 🌌"
                 )
-     )
+            )
     except Exception as e:
         log.error(f"[About Error] {e}")
 
-@bot.message_handler(func=lambda m: m.text == "🤖 Talk to Tina")
-def lala(msg):
+@bot.message_handler(func=lambda m: m.text == "💬 Talk to Tina")
+def talk_to_tina(msg):
     user_state[msg.chat.id] = "tina"
     try:
         with open(IMG_PATH / "tina.jpg", "rb") as photo:
             bot.send_photo(
                 msg.chat.id,
                 photo,
-                caption="  "💬 حالت گفت‌وگو با *tina* فعال شد\n"
-        "هرچی دوست داری بنویس 🌸""
+                caption=(
+                    "💬 حالت گفت‌وگو با Tina فعال شد\n"
+                    "هرچی دوست داری بنویس 🌸"
+                )
             )
     except Exception as e:
-        log.error(f"[LaLa Error] {e}")
+        log.error(f"[Tina Error] {e}")
+
 # =====================
 # ART ORDER
 # =====================
@@ -143,6 +142,7 @@ def art_order(msg):
         "4️⃣ توضیحات خاص\n\n"
         "✍️ بعد از ارسال، بررسی میشه 🌙"
     )
+
 # =============================
 # 💬 AI Chat
 # =============================
@@ -155,7 +155,7 @@ def chat(msg):
     except Exception as e:
         log.error(f"[Chat Error] {e}")
         bot.send_message(msg.chat.id, "⚠ مشکلی پیش اومد — دوباره امتحان کن 🌙")
- 
+
 # =============================
 # 🌐 Flask Webhook
 # =============================
@@ -175,6 +175,8 @@ def home():
 # 🚀 Main Entry
 # =============================
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+
     if RUN_MODE and SCHED_AVAILABLE:
         log.info("🌀 Scheduler started...")
         start_scheduler(interval_seconds=300)
@@ -182,4 +184,5 @@ if __name__ == "__main__":
         log.info("⏱ Scheduler disabled or not found.")
 
     log.info("✅ Bot is running...")
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=port)
+
