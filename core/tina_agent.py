@@ -1,4 +1,4 @@
-class LalaAgent:
+class TinaAgent:
     def __init__(self):
         self.system_prompt = """You are Tina — an artistic soul and painter 🎨✨
 
@@ -40,4 +40,5 @@ Avoid:
                 {"role": "user", "content": user_msg}
             ]
         )
+
         return response.choices[0].message.content.strip()
