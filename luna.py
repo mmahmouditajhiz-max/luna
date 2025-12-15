@@ -13,6 +13,14 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
+# بررسی وجود کلیدها
+if not TOKEN:
+    raise ValueError("TELEGRAM_TOKEN not found in environment variables")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY not found in environment variables")
+if not WEBHOOK_URL:
+    raise ValueError("WEBHOOK_URL not found in environment variables")
+
 bot = telebot.TeleBot(TOKEN)
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -83,7 +91,8 @@ def tina_chat(msg):
         )
         reply = response.choices[0].message.content
         bot.send_message(msg.chat.id, reply)
-    except Exception:
+    except Exception as e:
+        print(f"Error in tina_chat: {e}")  # برای لاگ
         bot.send_message(msg.chat.id, "🌙 الان کمی خسته‌ام… دوباره امتحان کن ✨")
 
 # =====================
@@ -107,18 +116,28 @@ def art_order(msg):
 # =====================
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
-    update = telebot.types.Update.de_json(request.data.decode("utf-8"))
-    bot.process_new_updates([update])
-    return "ok", 200
+    if request.headers.get('content-type') == 'application/json':
+        json_str = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_str)
+        bot.process_new_updates([update])
+        return "ok", 200
+    else:
+        return "Bad Request", 400
 
 @app.route("/")
 def home():
     return "🌙 Luna Bot is Online"
 
 # =====================
-# MAIN
+# MAIN - فقط برای اجرای محلی
 # =====================
 if __name__ == "__main__":
-    bot.remove_webhook()
-    bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
-    app.run(host="0.0.0.0", port=5000)
+    # فقط در محیط محلی وب‌هوک تنظیم شود
+    if os.getenv("RENDER"):  # در رندر اجرا می‌شود
+        print("Running on Render...")
+        # وب‌هوک اتوماتیک توسط رندر تنظیم می‌شود
+    else:  # اجرای محلی
+        print("Running locally...")
+        bot.remove_webhook()
+        bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
+        app.run(host="0.0.0.0", port=5000, debug=True)
